@@ -69,7 +69,7 @@ export async function loginUser(req,res){
                     isEmailVerified : user.isEmailVerified,
                     image : user.image
                 },
-                "secretkey99!!!!!"
+                "secretkey99!!!"
             )
 
             res.json({message : "Login successful", token : token})

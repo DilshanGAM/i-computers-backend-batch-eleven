@@ -11,7 +11,7 @@ export default function authenticate(req, res, next) {
 
             const token = header.replace("Bearer ", "")
 
-            jwt.verify( token , "secretkey99!!!!!", 
+            jwt.verify( token , "secretkey99!!!", 
                 (err , decoded)=>{
 
                     if(decoded == null){
