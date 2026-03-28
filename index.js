@@ -8,7 +8,7 @@ const mongoDBURI = "mongodb+srv://admin:1234@cluster0.pwakeym.mongodb.net/dev?ap
 
 mongoose.connect(mongoDBURI).then(
     ()=>{
-        console.log("Connected to MongoDB successfully")
+        console.log("Connected with MongoDB successfully")
     }
 )
 
