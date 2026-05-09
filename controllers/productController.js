@@ -37,6 +37,8 @@ export async function createProduct(req,res){
 
 export async function getAllProducts(req,res){
 
+    console.log("Products are fetching.....")
+
     try{
 
         if(req.user!=null && req.user.isAdmin){
