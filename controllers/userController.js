@@ -3,7 +3,20 @@ import bcrypt from "bcrypt"
 import jwt from "jsonwebtoken"
 import dotenv from "dotenv"
 import axios from "axios"
+import OTP from "../models/otp.js"
+import nodemailer from "nodemailer"
 dotenv.config()
+
+const transporter = nodemailer.createTransport({
+    service: "gmail",
+    host: "smtp.gmail.com",
+    port: 587,
+    secure: false,
+    auth: {
+        user: process.env.EMAIL,
+        pass: process.env.APP_PASSWORD
+    }
+})
 
 export async function createUser(req,res){
 
@@ -249,4 +262,203 @@ export async function googleLogin(req,res){
     }catch(err){
         console.log(err.message)
     }
+}
+
+export async function sendOTP(req,res){
+    try{
+        
+        const email = req.body.email
+
+        const user = await User.findOne( {email : email} )
+
+        if(user == null){
+            res.status(404).json({message : "User not found"})
+            return
+        }
+
+        if(user.isBlocked){
+            res.status(403).json({message : "User is blocked"})
+            return
+        }
+
+        await OTP.deleteOne( {email : email} )
+
+        // otp between 100000 and 999999
+        const otpNumber = Math.floor(100000 + Math.random() * 900000)
+
+        //save otp in the database
+
+        const otpHash = bcrypt.hashSync(otpNumber.toString(), 10)
+
+        const newOTP = new OTP({
+            email : email,
+            otp : otpHash
+        })
+
+        await newOTP.save()
+
+        //send otp to the user email
+        const message = {
+            from : process.env.EMAIL,
+            to : email,
+            subject : "OTP for password reset",
+            text : `Your OTP for password reset is ${otpNumber}. It is valid for 10 minutes.`
+        }
+
+        await transporter.sendMail(message)
+
+        res.json({message : "OTP sent successfully"})
+
+
+    }catch(err){
+        res.status(500).json({message : err.message})
+    }
+}
+
+export async function verifyOTP(req,res){
+
+    try{
+
+        const email = req.body.email
+        const otp = req.body.otp
+        const password = req.body.password
+
+        const otpRecord = await OTP.findOne( {email : email} )
+
+        if(otpRecord == null){
+            res.status(404).json({message : "OTP not found"})
+            return
+        }
+
+        //check if otp time passed 10 minutes
+
+        const currentTime = new Date()
+        const otpTime = new Date(otpRecord.time)
+
+        const timeDiff = (currentTime - otpTime) / (1000 * 60) // time difference in minutes
+
+        if(timeDiff > 10){
+            res.status(400).json({message : "OTP has expired"})
+            return
+        }
+
+        const isOTPValid = bcrypt.compareSync(otp , otpRecord.otp)
+
+        if(!isOTPValid){
+            res.status(400).json({message : "Invalid OTP"})
+            return
+        }
+
+        const passwordHash = bcrypt.hashSync(password, 10)
+
+        await User.updateOne( {email : email} , {password : passwordHash} )
+
+        await OTP.deleteOne( {email : email} )
+
+        res.json({message : "Password updated successfully"})
+
+    }catch(err){
+        res.status(500).json({message : err.message})
+    }
+
+}
+
+export async function getAllUsers(req,res){
+
+    if(req.user == null || req.user.isAdmin == false){
+        res.status(401).json({message : "Unauthorized"})
+        return
+    }
+
+    try{
+
+            const pageSizeInString = req.params.pageSize||"10"
+
+            const pageNumberInString = req.params.pageNumber||"1"
+
+            const pageSize = parseInt(pageSizeInString) //10
+
+            const pageNumber = parseInt(pageNumberInString) //1
+
+            const userCount = await User.countDocuments()
+
+            const totalPages = Math.ceil(userCount / pageSize)
+
+            const users = await User.find().skip((pageNumber-1)*pageSize).limit(pageSize)
+
+            res.json({
+                users : users,
+                totalPages : totalPages,
+                totalUsers : userCount
+            })
+        
+    }catch(err){
+        res.status(500).json({message : err.message})
+    }
+}
+
+export async function switchRole(req,res){
+
+    if(req.user == null || req.user.isAdmin == false){
+        res.status(401).json({message : "Unauthorized"})
+        return
+    }
+
+    try{
+
+        const email = req.params.email
+
+        const user = await User.findOne( {email : email} )
+
+        if(user == null){
+            res.status(404).json({message : "User not found"})
+            return
+        }
+
+        if(user.email == req.user.email){
+            res.status(400).json({message : "You cannot change your own role"})
+            return
+        }
+
+        await User.updateOne( {email : email} , {isAdmin : !user.isAdmin} )
+
+        res.json({message : "User role updated successfully"})
+
+    }catch(err){
+        res.status(500).json({message : err.message})
+    }
+
+}
+
+export async function updateUserState(req,res){
+
+    if(req.user == null || req.user.isAdmin == false){
+        res.status(401).json({message : "Unauthorized"})
+        return
+    }
+
+    try{
+
+        const email = req.params.email
+
+        const user = await User.findOne( {email : email} )
+
+        if(user == null){
+            res.status(404).json({message : "User not found"})
+            return
+        }
+
+        if(user.email == req.user.email){
+            res.status(400).json({message : "You cannot change your own block state"})
+            return
+        }
+
+        await User.updateOne( {email : email} , {isBlocked : !user.isBlocked} )
+
+        res.json({message : "User state updated successfully"})
+
+    }catch(err){
+        res.status(500).json({message : err.message})
+    }
+
 }
