@@ -15,6 +15,11 @@ mongoose.connect(mongoDBURI).then(
     ()=>{
         console.log("Connected with MongoDB successfully")
     }
+).catch(
+    (error)=>{
+        console.log("Error while connecting with MongoDB")
+        console.log(error)
+    }
 )
 
 const app = express()
